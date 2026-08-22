@@ -3,18 +3,6 @@
 
 create extension if not exists pgcrypto;
 
--- ============ helpers ============
-
-create or replace function public.is_staff() returns boolean
-language sql stable security definer set search_path = public as $$
-  select coalesce((select role in ('host','organizer','admin') from profiles where id = auth.uid()), false);
-$$;
-
-create or replace function public.is_admin() returns boolean
-language sql stable security definer set search_path = public as $$
-  select coalesce((select role = 'admin' from profiles where id = auth.uid()), false);
-$$;
-
 -- ============ profiles ============
 
 create table public.profiles (
@@ -36,6 +24,18 @@ create table public.profiles (
 );
 
 alter table public.profiles enable row level security;
+
+-- ============ helpers (after profiles: SQL functions validate bodies at creation) ============
+
+create or replace function public.is_staff() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role in ('host','organizer','admin') from profiles where id = auth.uid()), false);
+$$;
+
+create or replace function public.is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select role = 'admin' from profiles where id = auth.uid()), false);
+$$;
 
 create policy "profiles: public leaderboard read" on public.profiles
   for select to authenticated using (true);
@@ -277,7 +277,7 @@ begin
   v_idx := array_position(v_ordered, v_me);
   if v_idx is null then raise exception 'NOT_PARTICIPANT'; end if;
 
-  v_target := v_ordered[(v_idx mod cardinality(v_ordered)) + 1];
+  v_target := v_ordered[mod(v_idx, cardinality(v_ordered)) + 1];
 
   insert into peer_reviews (assignment_id, reviewer_id, reviewee_submission_id, rating, comment)
   select p_assignment_id, v_me, s.id, p_rating, p_comment
