@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #F1EFE8;
+  --foreground: #0E2A3A;
+  --card: #FFFFFF;
+  --muted-foreground: #1B4D5C;
+  --border: #CDE2EF;
+  --accent: #B08A57;
+  --accent-foreground: #0E2A3A;
+}
+.dark {
+  --background: #0A1E29;
+  --foreground: #F1EFE8;
+  --card: #10293A;
+  --muted-foreground: #B4C9CA;
+  --border: #1F4557;
+  --accent: #308EC5;
+  --accent-foreground: #F1EFE8;
+}
+
+html { scroll-behavior: smooth; }
+body { @apply bg-[color:var(--background)] text-[color:var(--foreground)]; }
+.font-arabic body, body[dir='rtl'] { font-family: Tajawal, sans-serif; }
+
+@layer components {
+  .app-card { @apply rounded-xl border shadow; border-color: var(--border); background: var(--card); }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-lg font-semibold transition active:scale-[.98] focus-visible:outline-none focus-visible:ring-2 ring-offset-1; background: var(--foreground); color: var(--background); }
+  .btn-secondary { @apply inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-lg font-semibold border transition active:scale-[.98] focus-visible:outline-none focus-visible:ring-2; border-color: var(--border); color: var(--foreground); background: var(--card); }
+  .btn-accent { @apply inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3 rounded-lg font-semibold transition active:scale-[.98]; background: var(--accent); color: var(--accent-foreground); }
+  .input-base { @apply w-full min-h-[48px] px-4 py-3 rounded-lg border bg-transparent outline-none focus:ring-2; border-color: var(--border); color: var(--foreground); }
+  .pill { @apply inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold; }
+}

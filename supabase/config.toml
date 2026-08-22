@@ -1,0 +1,19 @@
+# Supabase project configuration
+project_id = "english-workshop"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage", "graphql_public"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+
+[auth.external.google]
+enabled = false
+
+# Edge Functions run on Deno; secrets are set via:
+#   supabase secrets set GROQ_API_KEY=... YOUTUBE_API_KEY=... OMDB_API_KEY=...
+# The Gemini key is NOT a static secret — it lives in Supabase Vault (staff-rotatable, see F7).

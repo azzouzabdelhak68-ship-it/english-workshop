@@ -1,0 +1,37 @@
+# Scheduled agent-system evolution review. Inactive until this repo is pushed to GitHub.
+# Until then, reviews trigger via the session-start check in AGENTS.md +
+# scripts/check-evolution-due.ps1.
+
+name: agent-evolution
+
+on:
+  schedule:
+    # 09:00 UTC on every date containing the digit 5 (5th/15th/25th).
+    - cron: '0 9 5,15,25 * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  evolution-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check due state (skip if already reviewed)
+        id: due
+        shell: pwsh
+        run: ./scripts/check-evolution-due.ps1
+
+      # Wire your preferred coding agent here (opencode / claude / codex CLI ...).
+      # The prompt must instruct it to execute docs/agent/evolution-review.md and,
+      # if the decision is UPDATED, open a PR rather than committing to main.
+      - name: Run evolution review
+        if: steps.due.outcome == 'failure' # script exits 1 when a review is due
+        run: |
+          echo "Review is due. Invoke your agent CLI with:"
+          echo "  'Execute the procedure in docs/agent/evolution-review.md."
+          echo "   If the outcome is UPDATED, propose changes as a pull request.'"
+          exit 0
