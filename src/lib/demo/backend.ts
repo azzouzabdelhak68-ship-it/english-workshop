@@ -124,7 +124,8 @@ function seed(): Db {
       breakout_rooms: [],
       breakout_room_members: [],
       breakout_messages: [],
-      moderation_reports: []
+      moderation_reports: [],
+      ai_chat_sessions: []
     }
   }
 }

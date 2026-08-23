@@ -12,6 +12,19 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700;800&display=swap"
       rel="stylesheet"
     />
+    <style>
+      @media print {
+        .no-print, header.app-header, nav { display: none !important; }
+        body { background: #fff !important; }
+        .print-worksheet { box-shadow: none !important; border: none !important; max-width: 100% !important; margin: 0 !important; }
+        .print-worksheet * { color: #000 !important; background: transparent !important; border-color: #cbd5d3 !important; opacity: 1 !important; }
+        .print-worksheet header { background: #fff !important; }
+        .print-worksheet li { break-inside: avoid; margin-bottom: 10mm; }
+        .print-worksheet a[href]::after { content: " (" attr(href)")"; font-size: 9pt; word-break: break-all; }
+        @page { margin: 14mm; }
+      }
+      @keyframes fadeInUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>

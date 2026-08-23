@@ -42,7 +42,14 @@ Deno.serve(async (req) => {
     return json({ ok: false, error_code: 'AI_UNAVAILABLE' }, 403)
   }
 
-  let body: { user_message?: string; workshop_level?: string; chosen_movie?: string | null; prior_result?: unknown }
+  let body: {
+    user_message?: string
+    workshop_level?: string
+    chosen_movie?: string | null
+    prior_result?: unknown
+    edit_activity_index?: number
+    edit_instruction?: string
+  }
   try {
     body = await req.json()
   } catch {
@@ -50,8 +57,20 @@ Deno.serve(async (req) => {
   }
   const userMessage = (body.user_message ?? '').slice(0, 2000)
   const workshopLevel = body.workshop_level ?? 'Intermediate'
+  const editMode =
+    typeof body.edit_activity_index === 'number' &&
+    body.edit_activity_index >= 0 &&
+    body.edit_activity_index <= 3 &&
+    !!body.prior_result
+  const editIndex = editMode ? Math.floor(body.edit_activity_index as number) : 0
+  const editInstruction = editMode ? (body.edit_instruction ?? '').slice(0, 300) : ''
+  if (editMode && !editInstruction.trim()) return typedError('INVALID_JSON')
 
-  console.log(JSON.stringify({ event: 'generation_started', level: workshopLevel, mode: 'web_search_grounding' }))
+  console.log(JSON.stringify({
+    event: 'generation_started',
+    level: workshopLevel,
+    mode: editMode ? 'edit_activity' : 'generate'
+  }))
 
   // Load the rotatable key + selected model from Supabase Vault / ai_settings (service role only).
   const { data: settings } = await admin
@@ -82,9 +101,16 @@ Deno.serve(async (req) => {
   // tool) and must only use facts from its own search results (see system prompt).
   const { systemPrompt } = await loadSystemPrompt()
   const filledPrompt = systemPrompt
-    .replace('{{user_message}}', userMessage)
-    .replace('{{workshop_level}}', workshopLevel)
-    .replace('{{chosen_movie_or_null}}', body.chosen_movie ?? 'null')
+    .replaceAll('{{user_message}}', userMessage)
+    .replaceAll('{{workshop_level}}', workshopLevel)
+    .replaceAll('{{chosen_movie_or_null}}', body.chosen_movie ?? 'null')
+    .replaceAll(
+      '{{prior_result_json}}',
+      body.prior_result ? JSON.stringify(body.prior_result) : ''
+    )
+    .replaceAll('{{edit_mode}}', editMode ? 'true' : 'false')
+    .replaceAll('{{edit_index}}', String(editIndex))
+    .replaceAll('{{edit_instruction}}', editInstruction)
 
   let raw: string
   try {

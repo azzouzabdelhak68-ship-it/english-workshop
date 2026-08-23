@@ -214,6 +214,34 @@ export interface AiSettingsStatus {
   updated_at: string
 }
 
+export interface TranscriptMsg {
+  id: number
+  role: 'sys' | 'user'
+  kind: 'phase' | 'err' | 'user' | 'ok'
+  key?: string
+  vars?: Record<string, string | number>
+  raw?: string
+  at: string
+}
+
+export interface AiChatSessionRow {
+  id: string
+  owner: string
+  title: string
+  level: 'Beginner' | 'Intermediate' | 'Advanced'
+  focus_preset: string | null
+  transcript: TranscriptMsg[]
+  result: MovieSessionResult | null
+  updated_at: string
+}
+
+export interface DraftMeta {
+  id: string
+  title: string
+  updated_at: string
+  has_result: boolean
+}
+
 export interface MovieCandidate {
   title: string
   year: number

@@ -48,6 +48,18 @@ export const GEMINI_MODELS = [
   'gemini-2.5-flash'
 ] as const
 
+// Focus presets (AI_ROOM_PLAN.md F-E): id → i18n labelKey + promptPrefix.
+export const GEMINI_FOCUS_PRESETS = [
+  { id: 'speaking', labelKey: 'focusSpeaking', promptPrefix: 'Prioritize maximum student talking time and spoken interaction in every activity.' },
+  { id: 'grammar', labelKey: 'focusGrammar', promptPrefix: 'Weave one clear target grammar point (detection then reuse) across all four activities.' },
+  { id: 'vocab', labelKey: 'focusVocab', promptPrefix: 'Extract key vocabulary from the film and recycle it deliberately through all four activities.' },
+  { id: 'debate', labelKey: 'focusDebate', promptPrefix: 'Bias the activities toward argumentation, rebuttal and structured disagreement.' },
+  { id: 'culture', labelKey: 'focusCulture', promptPrefix: 'Connect the film to Arab-world cultural comparison where natural.' },
+  { id: 'exam', labelKey: 'focusExam', promptPrefix: 'Align activity outputs with exam-style speaking and writing tasks.' }
+] as const
+
+export type FocusPresetId = (typeof GEMINI_FOCUS_PRESETS)[number]['id']
+
 export function isStaffRole(role?: string | null): boolean {
   return !!role && STAFF_ROLES.includes(role)
 }
