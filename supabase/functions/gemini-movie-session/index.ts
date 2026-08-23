@@ -184,7 +184,6 @@ async function callGemini(key: string, model: string, prompt: string): Promise<s
         signal: controller.signal,
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          tools: [{ google_search: {} }],
           generationConfig: { temperature: 0.6 }
         })
       }

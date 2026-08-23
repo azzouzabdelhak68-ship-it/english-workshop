@@ -35,11 +35,12 @@ Deno.serve(async (req) => {
     const model = (body.model ?? '').trim()
     if (!isAllowedGeminiModel(model)) return json({ ok: false, reason: 'invalid_format' })
     const { data: current } = await admin.from('ai_settings').select('configured').eq('id', true).single()
-    await admin.from('ai_settings').update({
+    await admin.from('ai_settings').upsert({
+      id: true,
       gemini_model: model,
       updated_by: userData.user.id,
       updated_at: new Date().toISOString()
-    }).eq('id', true)
+    }, { onConflict: 'id' })
     console.log(JSON.stringify({ event: 'ai_model_changed', by: userData.user.id, model }))
     return json({ ok: true, configured: current?.configured ?? false, model })
   }
@@ -93,14 +94,15 @@ Deno.serve(async (req) => {
       await admin.schema('vault').from('secrets').delete().eq('id', existing.gemini_key_secret_id)
     }
 
-    await admin.from('ai_settings').update({
+    await admin.from('ai_settings').upsert({
+      id: true,
       gemini_key_secret_id: newSecretId,
       configured: true,
       last4: key.slice(-4),
       ...(isAllowedGeminiModel(body.model) ? { gemini_model: body.model } : {}),
       updated_by: userData.user.id,
       updated_at: new Date().toISOString()
-    }).eq('id', true)
+    }, { onConflict: 'id' })
 
     console.log(JSON.stringify({ event: 'ai_key_rotated', by: userData.user.id, configured: true }))
     const { data: after } = await admin.from('ai_settings').select('gemini_model').eq('id', true).single()
