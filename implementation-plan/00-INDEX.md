@@ -78,6 +78,6 @@ Halt and ask the human rather than guess when:
 | F1 Peer review | ✅ Built v1 | `peer_review_open` column + frozen participant set; pairing computed server-side (`submit_peer_review` RPC); staff mapping row |
 | F3 Breakout rooms | ✅ Built v1 | Capacity trigger (TOCTOU-safe); shared `<TextChatStream>` + one `moderation_reports` queue for main chat AND breakouts (scope decision) |
 | F5 More game types | ✅ Built v1 | Strategy interface per plan; renderMode shell (select-one / free-text / vote); self-vote blocked by DB trigger; config persisted on round |
-| F7 AI Chat Room | ✅ Built v1 | Two-phase pipeline; Vault-rotatable key w/ validate-before-commit; typed errors verbatim; leak-grep on response. Needs YOUTUBE_API_KEY + OMDB_API_KEY secrets to go live |
+| F7 AI Chat Room | ✅ Built v1 | Two-phase pipeline; Vault-rotatable key w/ validate-before-commit; typed errors verbatim; leak-grep on response. Needs YOUTUBE_API_KEY + OMDB_API_KEY secrets to go live. Extension (user-directed): staff-selectable Gemini model — `ai_settings.gemini_model` + CHECK allow-list (`0002`), `set_model` action, settings-card dropdown; deployed to cloud project |
 | F6 Admin analytics | ✅ Built v1 | Materialized overview + refresh RPC; per-student/per-session views; print/PDF deferred per PRD |
 | Design rollout | ✅ Built to standard | All screens built fresh against the Coastal palette gate (`02-design-system-checklist.md`); §1–16 core platform implemented in same pass |

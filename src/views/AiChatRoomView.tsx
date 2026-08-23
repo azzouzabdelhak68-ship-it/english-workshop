@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useApp } from '../context/AppContext'
 import type { AiSettingsStatus, MovieSessionResult } from '../lib/types'
-import { LEVELS } from '../lib/constants'
+import { LEVELS, GEMINI_MODELS } from '../lib/constants'
 import { Modal, Banner } from '../components/ui'
 import { TextChatStream } from '../components/TextChatStream'
 
@@ -26,6 +26,7 @@ export function AiChatRoomView() {
   const [status, setStatus] = useState<AiSettingsStatus | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [keyInput, setKeyInput] = useState('')
+  const [modelInput, setModelInput] = useState<string>('')
   const [busy, setBusy] = useState(false)
   const [sysMsgs, setSysMsgs] = useState<SysMsg[]>([])
   const [result, setResult] = useState<MovieSessionResult | null>(null)
@@ -94,6 +95,21 @@ export function AiChatRoomView() {
     void loadStatus()
   }
 
+  async function saveModel(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modelInput) return
+    setBusy(true)
+    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set_model', model: modelInput } })
+    setBusy(false)
+    if (data?.ok) {
+      setSettingsOpen(false)
+      void loadStatus()
+      pushSys(t('modelSaved'))
+    } else {
+      alert(t('keyInvalid'))
+    }
+  }
+
   async function createDraftSession(r: MovieSessionResult) {
     const starts = new Date(Date.now() + 2 * 86_400_000).toISOString()
     await supabase.from('sessions').insert({
@@ -130,8 +146,17 @@ export function AiChatRoomView() {
           {status?.configured && status.last4 && (
             <p className="text-xs opacity-50">{t('last4Label', { last4: status.last4 })}</p>
           )}
+          {status?.configured && status.gemini_model && (
+            <p className="text-xs font-semibold opacity-70">⚙️ {status.gemini_model}</p>
+          )}
         </div>
-        <button onClick={() => setSettingsOpen(true)} className="btn-secondary !min-h-[40px] px-4 py-2 text-sm">
+        <button
+          onClick={() => {
+            setModelInput(status?.gemini_model ?? GEMINI_MODELS[0])
+            setSettingsOpen(true)
+          }}
+          className="btn-secondary !min-h-[40px] px-4 py-2 text-sm"
+        >
           ⚙️ {status?.configured ? t('replaceKey') : t('enterApiKey')}
         </button>
       </div>
@@ -243,6 +268,21 @@ export function AiChatRoomView() {
             {busy ? t('loading') : t('save')}
           </button>
         </form>
+        {status?.configured && (
+          <form onSubmit={saveModel} className="mt-3 flex flex-col gap-3 border-t border-mist-200 pt-3 dark:border-mist-700">
+            <label className="flex flex-col gap-1 text-sm font-semibold">
+              {t('aiModelLabel')}
+              <select className="input-base" value={modelInput} onChange={(e) => setModelInput(e.target.value)}>
+                {GEMINI_MODELS.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" disabled={busy || modelInput === status.gemini_model} className="btn-secondary disabled:opacity-60">
+              {busy ? t('loading') : t('save')}
+            </button>
+          </form>
+        )}
         {status?.configured && (
           <button onClick={removeKey} disabled={busy} className="btn-secondary mt-3 w-full !text-red-700 dark:!text-red-400">
             {t('removeKey')}

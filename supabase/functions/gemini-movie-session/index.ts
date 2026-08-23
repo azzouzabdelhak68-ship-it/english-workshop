@@ -1,9 +1,9 @@
 import { preflight, json } from '../_shared/cors.ts'
+import { DEFAULT_GEMINI_MODEL } from '../_shared/gemini-models.ts'
 import {
   createClient,
 } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const GEMINI_MODEL = 'gemini-3.5-flash-lite'
 const YOUTUBE_KEY = Deno.env.get('YOUTUBE_API_KEY')
 const OMDB_KEY = Deno.env.get('OMDB_API_KEY')
 const TIMEOUT_MS = 22_000
@@ -81,10 +81,10 @@ Deno.serve(async (req) => {
     return typedError('NO_CANDIDATE')
   }
 
-  // Load the rotatable key from Supabase Vault (service role only).
+  // Load the rotatable key + selected model from Supabase Vault / ai_settings (service role only).
   const { data: settings } = await admin
     .from('ai_settings')
-    .select('gemini_key_secret_id, configured')
+    .select('gemini_key_secret_id, gemini_model, configured')
     .eq('id', true)
     .single()
 
@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', configured: false }))
     return typedError('NO_API_KEY')
   }
+  const geminiModel = settings.gemini_model ?? DEFAULT_GEMINI_MODEL
   const { data: secretRow, error: vaultErr } = await admin
     .schema('vault')
     .from('decrypted_secrets')
@@ -115,7 +116,7 @@ Deno.serve(async (req) => {
 
   let raw: string
   try {
-    raw = await callGemini(geminiKey, filledPrompt)
+    raw = await callGemini(geminiKey, geminiModel, filledPrompt)
   } catch (e) {
     console.log(JSON.stringify({ event: 'generation_failed', code: 'gemini_error', detail: String(e).slice(0, 120), configured: true }))
     return typedError('AI_UNAVAILABLE')
@@ -332,12 +333,12 @@ function validateResult(parsed: unknown): boolean {
   })
 }
 
-async function callGemini(key: string, prompt: string): Promise<string> {
+async function callGemini(key: string, model: string, prompt: string): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${key}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

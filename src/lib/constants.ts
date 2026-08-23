@@ -31,6 +31,23 @@ export const CATEGORY_COLORS: Record<string, string> = {
 
 export const STAFF_ROLES = ['host', 'organizer', 'admin']
 
+// Gemini models staff may pick in AI Chat Room settings (F7).
+// Mirrors supabase/functions/_shared/gemini-models.ts and the DB CHECK constraint.
+export const GEMINI_MODELS = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.7-flash',
+  'gemini-3.6-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+  'gemini-pro-latest',
+  'gemini-2.5-pro',
+  'gemini-2.5-flash'
+] as const
+
 export function isStaffRole(role?: string | null): boolean {
   return !!role && STAFF_ROLES.includes(role)
 }

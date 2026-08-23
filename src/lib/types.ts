@@ -209,6 +209,7 @@ export interface ScenarioTemplate {
 export interface AiSettingsStatus {
   configured: boolean
   last4: string | null
+  gemini_model: string | null
   updated_by: string | null
   updated_at: string
 }
