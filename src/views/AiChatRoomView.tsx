@@ -43,8 +43,10 @@ export function AiChatRoomView() {
   const [drafts, setDrafts] = useState<DraftMeta[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [draftsOpen, setDraftsOpen] = useState(false)
-  const [keyInput, setKeyInput] = useState('')
-  const [modelInput, setModelInput] = useState('')
+  const [googleKeyInput, setGoogleKeyInput] = useState('')
+  const [groqKeyInput, setGroqKeyInput] = useState('')
+  const [googleModelInput, setGoogleModelInput] = useState('')
+  const [groqModelInput, setGroqModelInput] = useState('')
   const [input, setInput] = useState('')
   const [saveState, setSaveState] = useState<'clean' | 'dirty' | 'saving' | 'saved' | 'error'>('clean')
   const msgId = useRef(0)
@@ -158,40 +160,41 @@ export function AiChatRoomView() {
     }
   }
 
-  // ── settings flows (L05–L09 preserved) ────────────────────────
-  async function saveKey(e: React.FormEvent) {
+  // ── settings flows (dual provider) ────────────────────────────
+  async function saveKey(provider: 'google' | 'groq', e: React.FormEvent) {
     e.preventDefault()
+    const key = provider === 'google' ? googleKeyInput.trim() : groqKeyInput.trim()
+    if (!key) return
     setBusy('publishing')
-    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set', key: keyInput.trim() } })
+    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set', provider, key } })
     setBusy('idle')
     if (data?.ok) {
-      setKeyInput('')
-      setSettingsOpen(false)
+      if (provider === 'google') setGoogleKeyInput('')
+      else setGroqKeyInput('')
       void loadStatus()
     } else {
       alert(t('keyInvalid'))
     }
   }
 
-  async function saveModel(e: React.FormEvent) {
+  async function saveModel(provider: 'google' | 'groq', e: React.FormEvent) {
     e.preventDefault()
-    if (!modelInput) return
+    const model = provider === 'google' ? googleModelInput : groqModelInput
+    if (!model) return
     setBusy('publishing')
-    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set_model', model: modelInput } })
+    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set_model', provider, model } })
     setBusy('idle')
     if (data?.ok) {
-      setSettingsOpen(false)
       void loadStatus()
     } else {
       alert(t('keyInvalid'))
     }
   }
 
-  async function removeKey() {
+  async function removeKey(provider: 'google' | 'groq') {
     setBusy('publishing')
-    await supabase.functions.invoke('update-ai-key', { body: { action: 'remove' } })
+    await supabase.functions.invoke('update-ai-key', { body: { action: 'remove', provider } })
     setBusy('idle')
-    setSettingsOpen(false)
     void loadStatus()
   }
 
@@ -342,17 +345,18 @@ export function AiChatRoomView() {
     <div className="mx-auto max-w-3xl px-4 pb-24 pt-6 md:pb-10">
       <Banner kind="info">🔒 {t('aiChatStaffOnly')}</Banner>
 
-      {/* header cockpit */}
+      {/* header cockpit — dual provider status */}
       <div className="app-card relative mt-4 flex flex-wrap items-center justify-between gap-3 p-4">
-        <div className="min-w-0">
+        <div className="min-w-0 space-y-0.5">
           <p className="font-bold">🔑 {t('aiChatSettings')}</p>
-          <p className="text-sm opacity-70">{status?.configured ? t('apiKeyConfigured') : t('apiKeyNotConfigured')}</p>
-          {status?.configured && status.last4 && (
-            <p className="text-xs opacity-50">{t('last4Label', { last4: status.last4 })}</p>
-          )}
-          {status?.configured && status.gemini_model && (
-            <p className="text-xs font-semibold opacity-70">⚙️ {status.gemini_model}</p>
-          )}
+          <p className="text-xs opacity-70">
+            🔵 Google: {status?.configured ? `${t('apiKeyConfigured')} · ${status.gemini_model ?? ''}` : t('apiKeyNotConfigured')}
+            {status?.configured && status.last4 ? ` · ${t('last4Label', { last4: status.last4 })}` : ''}
+          </p>
+          <p className="text-xs opacity-70">
+            🟠 Groq: {(status as unknown as Record<string, unknown>)?.groq_configured ? `${t('apiKeyConfigured')} · ${(status as unknown as Record<string, string>).groq_model ?? ''}` : t('apiKeyNotConfigured')}
+            {(status as unknown as Record<string, unknown>)?.groq_configured && (status as unknown as Record<string, string>).groq_last4 ? ` · ${t('last4Label', { last4: (status as unknown as Record<string, string>).groq_last4 })}` : ''}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {saveState !== 'clean' && (
@@ -380,12 +384,13 @@ export function AiChatRoomView() {
           </button>
           <button
             onClick={() => {
-              setModelInput(status?.gemini_model ?? '')
+              setGoogleModelInput(status?.gemini_model ?? '')
+              setGroqModelInput((status as unknown as Record<string, string>)?.groq_model ?? '')
               setSettingsOpen(true)
             }}
             className="btn-secondary !min-h-[40px] px-4 py-2 text-sm"
           >
-            ⚙️ {status?.configured ? t('replaceKey') : t('enterApiKey')}
+            ⚙️ {t('aiChatSettings')}
           </button>
         </div>
         <DraftsMenu
@@ -509,11 +514,15 @@ export function AiChatRoomView() {
         onClose={() => setSettingsOpen(false)}
         status={status}
         busy={busy}
-        modelInput={modelInput}
-        setModelInput={setModelInput}
+        googleKeyInput={googleKeyInput}
+        setGoogleKeyInput={setGoogleKeyInput}
+        groqKeyInput={groqKeyInput}
+        setGroqKeyInput={setGroqKeyInput}
+        googleModelInput={googleModelInput}
+        setGoogleModelInput={setGoogleModelInput}
+        groqModelInput={groqModelInput}
+        setGroqModelInput={setGroqModelInput}
         onSaveKey={saveKey}
-        keyInput={keyInput}
-        setKeyInput={setKeyInput}
         onSaveModel={saveModel}
         onRemove={removeKey}
       />

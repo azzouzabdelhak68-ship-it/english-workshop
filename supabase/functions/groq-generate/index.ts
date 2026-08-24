@@ -1,9 +1,9 @@
 import { preflight, json } from '../_shared/cors.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { DEFAULT_GROQ_MODEL } from '../_shared/groq-models.ts'
 
-// Static secret — set once via: supabase secrets set GROQ_API_KEY=...
-const GROQ_KEY = Deno.env.get('GROQ_API_KEY')
+const ENV_GROQ_KEY = Deno.env.get('GROQ_API_KEY')
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
-const MODEL = 'llama-3.1-8b-instant'
 
 interface Question {
   prompt: string
@@ -17,7 +17,24 @@ Deno.serve(async (req) => {
   if (pf) return pf
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
 
-  if (!GROQ_KEY) return json({ error: 'groq_not_configured' }, 500)
+  // Resolve Groq key: Vault first, then env fallback
+  let groqKey: string | null = null
+  let groqModel: string = DEFAULT_GROQ_MODEL
+  try {
+    const admin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '')
+    const { data: settings } = await admin.from('ai_settings').select('groq_key_secret_id, groq_configured, groq_model').eq('id', true).single()
+    if (settings && (settings as Record<string, unknown>).groq_configured && (settings as Record<string, string>).groq_key_secret_id) {
+      const { data: decrypted } = await admin.rpc('read_vault_secret', { p_id: (settings as Record<string, string>).groq_key_secret_id })
+      if (typeof decrypted === 'string' && decrypted.length > 20) groqKey = decrypted
+      if (typeof (settings as Record<string, string>).groq_model === 'string' && (settings as Record<string, string>).groq_model) {
+        groqModel = (settings as Record<string, string>).groq_model
+      }
+    }
+  } catch (_) {
+    // fall through to env
+  }
+  if (!groqKey) groqKey = ENV_GROQ_KEY ?? null
+  if (!groqKey) return json({ error: 'groq_not_configured' }, 500)
 
   let body: { mode?: string; game_type?: string; difficulty?: string; text?: string; title?: string }
   try {
@@ -28,16 +45,16 @@ Deno.serve(async (req) => {
 
   try {
     if (body.mode === 'weekly-quiz') {
-      const questions = await askForQuestions(quizPrompt(), 5)
+      const questions = await askForQuestions(groqKey, groqModel, quizPrompt(), 5)
       return json({ title: '🤖 AI Weekly Quiz Ready for Review', questions })
     }
     if (body.mode === 'game-questions') {
       const n = 5
-      const questions = await askForQuestions(gamePrompt(body.game_type ?? 'hot-seat', body.difficulty ?? 'Intermediate'), n)
+      const questions = await askForQuestions(groqKey, groqModel, gamePrompt(body.game_type ?? 'hot-seat', body.difficulty ?? 'Intermediate'), n)
       return json({ questions })
     }
     if (body.mode === 'essay-feedback') {
-      const feedback = await feedbackPrompt(body.text ?? '', body.title ?? '')
+      const feedback = await feedbackPrompt(groqKey, groqModel, body.text ?? '', body.title ?? '')
       return json({ feedback })
     }
     return json({ error: 'unknown_mode' }, 400)
@@ -47,12 +64,12 @@ Deno.serve(async (req) => {
   }
 })
 
-async function chat(system: string, user: string): Promise<string> {
+async function chat(key: string, model: string, system: string, user: string): Promise<string> {
   const res = await fetch(GROQ_URL, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${GROQ_KEY}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: MODEL,
+      model,
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user }
@@ -77,8 +94,10 @@ function parseQuestions(raw: string): Question[] {
   }))
 }
 
-async function askForQuestions(prompt: string, n: number): Promise<Question[]> {
+async function askForQuestions(key: string, model: string, prompt: string, n: number): Promise<Question[]> {
   const raw = await chat(
+    key,
+    model,
     'You generate English practice quiz content for Arabic-speaking learners. Return ONLY valid JSON: {"questions":[{"prompt","hint_ar","options":[...],"answer_index"}]}. Arabic hints clarify instructions but the quiz is English-first.',
     `${prompt} Produce exactly ${n} questions.`
   )
@@ -101,8 +120,10 @@ function gamePrompt(type: string, difficulty: string): string {
   return `Generate ${specs[type] ?? specs['hot-seat']} at ${difficulty} level.`
 }
 
-async function feedbackPrompt(text: string, title: string): Promise<string> {
+async function feedbackPrompt(key: string, model: string, text: string, title: string): Promise<string> {
   return await chat(
+    key,
+    model,
     'You are an encouraging English writing coach for Arabic-speaking learners. Reply in plain text (no JSON), max 120 words: two strengths + one concrete improvement.',
     `Assignment: ${title}\n\nStudent writing:\n${text}`
   )

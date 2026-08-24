@@ -48,6 +48,16 @@ export const GEMINI_MODELS = [
   'gemini-2.5-flash'
 ] as const
 
+export const GROQ_MODELS = [
+  'llama-3.1-8b-instant',
+  'llama-3.3-70b-versatile',
+  'llama-3.3-70b-specdec',
+  'mixtral-8x7b-32768',
+  'gemma2-9b-it',
+  'llama3-8b-8192',
+  'llama3-70b-8192'
+] as const
+
 // Focus presets (AI_ROOM_PLAN.md F-E): id → i18n labelKey + promptPrefix.
 export const GEMINI_FOCUS_PRESETS = [
   { id: 'speaking', labelKey: 'focusSpeaking', promptPrefix: 'Prioritize maximum student talking time and spoken interaction in every activity.' },
