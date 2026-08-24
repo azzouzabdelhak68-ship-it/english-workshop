@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
   if (body.action === 'remove') {
     const { data: current } = await admin.from('ai_settings').select('gemini_key_secret_id').eq('id', true).single()
     if (current?.gemini_key_secret_id) {
-      await admin.schema('vault').from('secrets').delete().eq('id', current.gemini_key_secret_id)
+      await admin.rpc('delete_vault_secret', { p_id: current.gemini_key_secret_id })
     }
     await admin.from('ai_settings').update({
       gemini_key_secret_id: null,
@@ -78,20 +78,16 @@ Deno.serve(async (req) => {
 
     const { data: existing } = await admin.from('ai_settings').select('gemini_key_secret_id').eq('id', true).single()
 
-    const { data: secretId, error: secretErr } = await admin.rpc('vault_create_secret', {
+    const { data: secretId, error: secretErr } = await admin.rpc('create_vault_secret', {
       p_secret: key,
       p_name: 'gemini_api_key'
     })
 
     let newSecretId: string | null = typeof secretId === 'string' ? secretId : null
-    if (secretErr || !newSecretId) {
-      const inserted = await admin.schema('vault').from('secrets').insert({ secret: key, name: 'gemini_api_key' }).select('id').single()
-      newSecretId = inserted.data?.id ?? null
-      if (!newSecretId) return json({ ok: false, reason: 'storage_failed' })
-    }
+    if (secretErr || !newSecretId) return json({ ok: false, reason: 'storage_failed' })
 
     if (existing?.gemini_key_secret_id && existing.gemini_key_secret_id !== newSecretId) {
-      await admin.schema('vault').from('secrets').delete().eq('id', existing.gemini_key_secret_id)
+      await admin.rpc('delete_vault_secret', { p_id: existing.gemini_key_secret_id })
     }
 
     await admin.from('ai_settings').upsert({

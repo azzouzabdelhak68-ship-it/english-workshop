@@ -84,18 +84,15 @@ Deno.serve(async (req) => {
     return typedError('NO_API_KEY')
   }
   const geminiModel = settings.gemini_model ?? DEFAULT_GEMINI_MODEL
-  const { data: secretRow, error: vaultErr } = await admin
-    .schema('vault')
-    .from('decrypted_secrets')
-    .select('decrypted_secret')
-    .eq('id', settings.gemini_key_secret_id)
-    .single()
+  const { data: decrypted, error: vaultErr } = await admin.rpc('read_vault_secret', {
+    p_id: settings.gemini_key_secret_id
+  })
 
-  if (vaultErr || !secretRow?.decrypted_secret) {
-    console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', configured: true }))
+  const geminiKey: string | null = typeof decrypted === 'string' ? decrypted : null
+  if (vaultErr || !geminiKey) {
+    console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', configured: true, vaultErr: String(vaultErr?.message ?? '').slice(0, 80) }))
     return typedError('NO_API_KEY')
   }
-  const geminiKey: string = secretRow.decrypted_secret
 
   // Single grounded Gemini call: the model searches the web itself (google_search
   // tool) and must only use facts from its own search results (see system prompt).
