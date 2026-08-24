@@ -7,3 +7,5 @@ dev-dist
 supabase/.branches
 supabase/.temp
 .DS_Store
+
+supabase-token.txt

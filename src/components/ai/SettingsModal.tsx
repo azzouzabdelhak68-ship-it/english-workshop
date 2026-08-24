@@ -20,6 +20,7 @@ interface Props {
   onSaveKey: (provider: 'google' | 'groq', e: React.FormEvent) => void
   onSaveModel: (provider: 'google' | 'groq', e: React.FormEvent) => void
   onRemove: (provider: 'google' | 'groq') => void
+  onSetChatProvider: (provider: 'google' | 'groq') => void
 }
 
 export function SettingsModal(p: Props) {
@@ -34,6 +35,24 @@ export function SettingsModal(p: Props) {
 
   return (
     <Modal open={p.open} onClose={p.onClose} title={t('aiChatSettings')}>
+      {/* Chat provider switch — controls which engine the AI Chat Room uses */}
+      <div className="mb-4 flex items-center gap-2 rounded-lg bg-mist-100 p-2 dark:bg-mist-800">
+        <span className="text-xs font-bold">AI Chat uses:</span>
+        <button
+          onClick={() => p.onSetChatProvider('google')}
+          className={`rounded-full px-3 py-1 text-xs font-bold ${p.status?.ai_chat_provider !== 'groq' ? 'bg-petrol-700 text-white' : 'bg-white text-mist-900 dark:bg-mist-700 dark:text-mist-100'}`}
+        >
+          🔵 Google
+        </button>
+        <button
+          onClick={() => p.onSetChatProvider('groq')}
+          className={`rounded-full px-3 py-1 text-xs font-bold ${p.status?.ai_chat_provider === 'groq' ? 'bg-petrol-700 text-white' : 'bg-white text-mist-900 dark:bg-mist-700 dark:text-mist-100'}`}
+        >
+          🟠 Groq
+        </button>
+        <span className="ms-auto text-[10px] opacity-60">{p.status?.ai_chat_provider === 'groq' ? 'Groq engine' : 'Google engine'}</span>
+      </div>
+
       {/* Provider tabs */}
       <div className="mb-4 flex gap-2">
         <button

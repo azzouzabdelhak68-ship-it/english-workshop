@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AppProvider, useApp } from './context/AppContext'
-import { isDemoMode, supabase } from './lib/supabase'
+import { isDemoMode, isConfigured, setDemoOverride, supabase } from './lib/supabase'
 import { useHashRoute } from './lib/router'
 import type { Profile } from './lib/types'
 import { Navbar, BottomNav, type TabKey } from './components/Navbar'
@@ -22,12 +22,30 @@ import { AiChatRoomView } from './views/AiChatRoomView'
 import { AdminAnalyticsView } from './views/AdminAnalyticsView'
 
 function DemoBadge() {
+  if (!isDemoMode) {
+    if (!isConfigured) return null
+    return (
+      <button
+        onClick={() => setDemoOverride('demo')}
+        className="fixed bottom-20 start-3 z-40 rounded-full bg-mist-700 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg md:bottom-3"
+        title="Switch to demo (local) mode"
+      >
+        ☁️ Live — tap for demo
+      </button>
+    )
+  }
   return (
-    <div
-      className="fixed bottom-20 start-3 z-40 rounded-full bg-brass-500 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-lg md:bottom-3"
-      title="Local demo mode: data lives in your browser only. Reset via console: EW_DEMO_RESET()"
-    >
-      🧪 Demo mode — local data
+    <div className="fixed bottom-20 start-3 z-40 flex items-center gap-1 rounded-full bg-brass-500 px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-white shadow-lg md:bottom-3">
+      <span title="Local demo mode: data lives in your browser only. Reset via console: EW_DEMO_RESET()">🧪 Demo</span>
+      {isConfigured && (
+        <button
+          onClick={() => setDemoOverride('live')}
+          className="ms-1 rounded-full bg-white/20 px-2 py-0.5 text-[9px] font-bold"
+          title="Switch back to live Supabase"
+        >
+          → Live
+        </button>
+      )}
     </div>
   )
 }

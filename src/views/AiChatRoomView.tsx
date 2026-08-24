@@ -198,6 +198,13 @@ export function AiChatRoomView() {
     void loadStatus()
   }
 
+  async function setChatProvider(provider: 'google' | 'groq') {
+    setBusy('publishing')
+    const { data } = await supabase.functions.invoke('update-ai-key', { body: { action: 'set_chat_provider', provider } })
+    setBusy('idle')
+    if (data?.ok) void loadStatus()
+  }
+
   // ── generation ────────────────────────────────────────────────
   async function generate(userMessage: string) {
     setBusy('generating')
@@ -356,6 +363,16 @@ export function AiChatRoomView() {
           <p className="text-xs opacity-70">
             🟠 Groq: {(status as unknown as Record<string, unknown>)?.groq_configured ? `${t('apiKeyConfigured')} · ${(status as unknown as Record<string, string>).groq_model ?? ''}` : t('apiKeyNotConfigured')}
             {(status as unknown as Record<string, unknown>)?.groq_configured && (status as unknown as Record<string, string>).groq_last4 ? ` · ${t('last4Label', { last4: (status as unknown as Record<string, string>).groq_last4 })}` : ''}
+          </p>
+          <p className="text-xs font-semibold opacity-80">
+            🤖 Chat: {(status as unknown as Record<string, string>)?.ai_chat_provider === 'groq' ? 'Groq' : 'Google'}
+            <button
+              onClick={() => setChatProvider((status as unknown as Record<string, string>)?.ai_chat_provider === 'groq' ? 'google' : 'groq')}
+              disabled={busy}
+              className="ms-2 rounded-full bg-mist-200 px-2 py-0.5 text-[10px] font-bold hover:bg-mist-300 disabled:opacity-50 dark:bg-mist-700 dark:hover:bg-mist-600"
+            >
+              Switch
+            </button>
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -525,6 +542,7 @@ export function AiChatRoomView() {
         onSaveKey={saveKey}
         onSaveModel={saveModel}
         onRemove={removeKey}
+        onSetChatProvider={setChatProvider}
       />
     </div>
   )

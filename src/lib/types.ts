@@ -213,6 +213,7 @@ export interface AiSettingsStatus {
   groq_configured: boolean
   groq_last4: string | null
   groq_model: string | null
+  ai_chat_provider: 'google' | 'groq'
   updated_by: string | null
   updated_at: string
 }

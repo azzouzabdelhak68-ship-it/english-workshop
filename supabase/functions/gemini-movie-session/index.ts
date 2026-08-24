@@ -1,10 +1,12 @@
 import { preflight, json } from '../_shared/cors.ts'
 import { DEFAULT_GEMINI_MODEL } from '../_shared/gemini-models.ts'
+import { DEFAULT_GROQ_MODEL } from '../_shared/groq-models.ts'
 import {
   createClient,
 } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const TIMEOUT_MS = 45_000
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 interface Candidate {
   title: string
@@ -72,26 +74,40 @@ Deno.serve(async (req) => {
     mode: editMode ? 'edit_activity' : 'generate'
   }))
 
-  // Load the rotatable key + selected model from Supabase Vault / ai_settings (service role only).
+  // Load provider + rotatable keys from ai_settings (Vault)
   const { data: settings } = await admin
     .from('ai_settings')
-    .select('gemini_key_secret_id, gemini_model, configured')
+    .select('gemini_key_secret_id, gemini_model, configured, groq_key_secret_id, groq_model, groq_configured, ai_chat_provider')
     .eq('id', true)
     .single()
 
-  if (!settings?.configured || !settings.gemini_key_secret_id) {
-    console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', configured: false }))
-    return typedError('NO_API_KEY')
-  }
-  const geminiModel = settings.gemini_model ?? DEFAULT_GEMINI_MODEL
-  const { data: decrypted, error: vaultErr } = await admin.rpc('read_vault_secret', {
-    p_id: settings.gemini_key_secret_id
-  })
-
-  const geminiKey: string | null = typeof decrypted === 'string' ? decrypted : null
-  if (vaultErr || !geminiKey) {
-    console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', configured: true, vaultErr: String(vaultErr?.message ?? '').slice(0, 80) }))
-    return typedError('NO_API_KEY')
+  const provider: 'google' | 'groq' = (settings as Record<string, string>)?.ai_chat_provider === 'groq' ? 'groq' : 'google'
+  let apiKey: string | null = null
+  let model: string
+  if (provider === 'groq') {
+    if (!(settings as Record<string, unknown>)?.groq_configured || !(settings as Record<string, string>)?.groq_key_secret_id) {
+      console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', provider, configured: false }))
+      return typedError('NO_API_KEY')
+    }
+    model = (settings as Record<string, string>).groq_model ?? DEFAULT_GROQ_MODEL
+    const { data: dec, error: ve } = await admin.rpc('read_vault_secret', { p_id: (settings as Record<string, string>).groq_key_secret_id })
+    apiKey = typeof dec === 'string' ? dec : null
+    if (ve || !apiKey) {
+      console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', provider, configured: true }))
+      return typedError('NO_API_KEY')
+    }
+  } else {
+    if (!(settings as Record<string, unknown>)?.configured || !(settings as Record<string, string>)?.gemini_key_secret_id) {
+      console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', provider, configured: false }))
+      return typedError('NO_API_KEY')
+    }
+    model = (settings as Record<string, string>).gemini_model ?? DEFAULT_GEMINI_MODEL
+    const { data: dec, error: ve } = await admin.rpc('read_vault_secret', { p_id: (settings as Record<string, string>).gemini_key_secret_id })
+    apiKey = typeof dec === 'string' ? dec : null
+    if (ve || !apiKey) {
+      console.log(JSON.stringify({ event: 'generation_failed', code: 'missing_key', provider, configured: true }))
+      return typedError('NO_API_KEY')
+    }
   }
 
   // Single grounded Gemini call: the model searches the web itself (google_search
@@ -111,9 +127,11 @@ Deno.serve(async (req) => {
 
   let raw: string
   try {
-    raw = await callGemini(geminiKey, geminiModel, filledPrompt)
+    raw = provider === 'groq'
+      ? await callGroq(apiKey, model, filledPrompt)
+      : await callGemini(apiKey, model, filledPrompt)
   } catch (e) {
-    console.log(JSON.stringify({ event: 'generation_failed', code: 'gemini_error', detail: String(e).slice(0, 120), configured: true }))
+    console.log(JSON.stringify({ event: 'generation_failed', code: 'gemini_error', provider, detail: String(e).slice(0, 120), configured: true }))
     return typedError('AI_UNAVAILABLE')
   }
 
@@ -125,8 +143,14 @@ Deno.serve(async (req) => {
     return typedError('INVALID_JSON')
   }
 
+  // Handle "no candidate" signal from prompt (session null)
+  const maybeSession = (parsed as Record<string, unknown>)?.session as unknown
+  if (maybeSession === null) {
+    console.log(JSON.stringify({ event: 'generation_failed', code: 'no_candidate_signal', provider }))
+    return typedError('NO_CANDIDATE')
+  }
   if (!validateResult(parsed)) {
-    console.log(JSON.stringify({ event: 'generation_failed', code: 'schema_invalid', configured: true }))
+    console.log(JSON.stringify({ event: 'generation_failed', code: 'schema_invalid', provider, raw: JSON.stringify(parsed).slice(0, 600) }))
     return typedError('INVALID_JSON')
   }
 
@@ -134,13 +158,14 @@ Deno.serve(async (req) => {
 
   // Defense-in-depth: the raw key must never appear in any response body.
   const payload = JSON.stringify({ ok: true, result: parsed })
-  if (payload.includes(geminiKey)) {
+  if (apiKey && payload.includes(apiKey)) {
     console.error(JSON.stringify({ event: 'generation_failed', code: 'secret_leak_blocked' }))
     return typedError('AI_UNAVAILABLE')
   }
 
   console.log(JSON.stringify({
     event: 'session_generated',
+    provider,
     film: result.session.film,
     total_minutes: result.session.duration_minutes,
     configured: true
@@ -319,25 +344,57 @@ function extractJson(raw: string): string {
 function validateResult(parsed: unknown): boolean {
   if (typeof parsed !== 'object' || parsed === null) return false
   const r = parsed as Record<string, unknown>
-  const session = r.session as Record<string, unknown> | undefined
-  const activities = r.activities as unknown[] | undefined
-  if (!session) return false
-  if (typeof session.title !== 'string' || typeof session.film !== 'string') return false
-  if (typeof session.duration_minutes !== 'number') return false
-  if (!Array.isArray(activities) || activities.length !== 4) return false
-  return activities.every((a) => {
-    const act = a as Record<string, unknown>
-    return (
+  let session = r.session as Record<string, unknown> | undefined
+  let activities = r.activities as unknown[] | undefined
+  // Allow session null -> treat as no candidate, but for generation we require session
+  if (!session) {
+    console.log(JSON.stringify({ event: 'validation_detail', reason: 'missing_session' }))
+    return false
+  }
+  if (typeof session.title !== 'string' || typeof session.film !== 'string') {
+    console.log(JSON.stringify({ event: 'validation_detail', reason: 'session_title_film' }))
+    return false
+  }
+  // Coerce duration_minutes if string
+  if (typeof session.duration_minutes === 'string') {
+    const n = Number(session.duration_minutes)
+    if (!Number.isNaN(n)) (session as Record<string, unknown>).duration_minutes = n
+  }
+  if (typeof session.duration_minutes !== 'number') {
+    console.log(JSON.stringify({ event: 'validation_detail', reason: 'duration_not_number', val: String((session as Record<string, unknown>).duration_minutes).slice(0, 20) }))
+    return false
+  }
+  if (!Array.isArray(activities) || activities.length !== 4) {
+    console.log(JSON.stringify({ event: 'validation_detail', reason: 'activities_length', len: Array.isArray(activities) ? activities.length : -1 }))
+    return false
+  }
+  for (let i = 0; i < activities.length; i++) {
+    const act = activities[i] as Record<string, unknown>
+    // Coerce timing_min string -> number
+    if (typeof act.timing_min === 'string') {
+      const n = Number(act.timing_min)
+      if (!Number.isNaN(n)) act.timing_min = n
+    }
+    // Ensure arabicHint exists (optional -> default '')
+    if (typeof act.arabicHint !== 'string') act.arabicHint = (act.arabicHint as string) ?? ''
+    // Ensure skill_focus includes communication (auto-fix)
+    if (!Array.isArray(act.skill_focus)) act.skill_focus = ['communication']
+    else if (!(act.skill_focus as unknown[]).includes('communication')) {
+      ;(act.skill_focus as unknown[]).push('communication')
+    }
+    const ok =
       typeof act.title === 'string' &&
       typeof act.goal === 'string' &&
       typeof act.timing_min === 'number' &&
       typeof act.grouping === 'string' &&
       typeof act.prompt === 'string' &&
-      typeof act.expected_output === 'string' &&
-      Array.isArray(act.skill_focus) &&
-      (act.skill_focus as unknown[]).includes('communication')
-    )
-  })
+      typeof act.expected_output === 'string'
+    if (!ok) {
+      console.log(JSON.stringify({ event: 'validation_detail', reason: `activity_${i}_fields`, act: JSON.stringify(act).slice(0, 200) }))
+      return false
+    }
+  }
+  return true
 }
 
 async function callGemini(key: string, model: string, prompt: string): Promise<string> {
@@ -364,6 +421,35 @@ async function callGemini(key: string, model: string, prompt: string): Promise<s
       .filter((t: unknown): t is string => typeof t === 'string')
       .join('')
     if (!text) throw new Error('empty completion')
+    return text
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function callGroq(key: string, model: string, prompt: string): Promise<string> {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  try {
+    const res = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are the English Workshop Session Designer. Return ONLY valid JSON per the provided schema. Never add markdown or commentary.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.6,
+        response_format: { type: 'json_object' }
+      })
+    })
+    if (res.status === 429 || res.status >= 500) throw new Error(`groq ${res.status}`)
+    if (!res.ok) throw new Error(`groq ${res.status}`)
+    const data = await res.json()
+    const text = data.choices?.[0]?.message?.content
+    if (typeof text !== 'string' || !text) throw new Error('empty groq completion')
     return text
   } finally {
     clearTimeout(timeout)

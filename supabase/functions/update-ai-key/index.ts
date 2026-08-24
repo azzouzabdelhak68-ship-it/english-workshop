@@ -38,20 +38,28 @@ Deno.serve(async (req) => {
 
   const provider = normalizeProvider(body.provider)
 
+  if (body.action === 'set_chat_provider') {
+    const p: Provider = body.provider === 'groq' ? 'groq' : 'google'
+    await admin.from('ai_settings').upsert({ id: true, ai_chat_provider: p, updated_by: userData.user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
+    console.log(JSON.stringify({ event: 'ai_chat_provider_changed', provider: p, by: userData.user.id }))
+    const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model, ai_chat_provider').eq('id', true).single()
+    return json({ ok: true, ...cur as object })
+  }
+
   if (body.action === 'set_model') {
     const model = (body.model ?? '').trim()
     if (provider === 'google') {
       if (!isAllowedGeminiModel(model)) return json({ ok: false, reason: 'invalid_format' })
       await admin.from('ai_settings').upsert({ id: true, gemini_model: model, updated_by: userData.user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
       console.log(JSON.stringify({ event: 'ai_model_changed', provider, by: userData.user.id, model }))
-      const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model').eq('id', true).single()
-      return json({ ok: true, ...cur, model })
+      const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model, ai_chat_provider').eq('id', true).single()
+      return json({ ok: true, ...cur as object, model })
     } else {
       if (!isAllowedGroqModel(model)) return json({ ok: false, reason: 'invalid_format' })
       await admin.from('ai_settings').upsert({ id: true, groq_model: model, updated_by: userData.user.id, updated_at: new Date().toISOString() }, { onConflict: 'id' })
       console.log(JSON.stringify({ event: 'ai_model_changed', provider, by: userData.user.id, model }))
-      const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model').eq('id', true).single()
-      return json({ ok: true, ...cur, groq_model: model })
+      const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model, ai_chat_provider').eq('id', true).single()
+      return json({ ok: true, ...cur as object, groq_model: model })
     }
   }
 
@@ -67,8 +75,8 @@ Deno.serve(async (req) => {
       await admin.from('ai_settings').update({ groq_key_secret_id: null, groq_configured: false, groq_last4: null, updated_by: userData.user.id, updated_at: new Date().toISOString() }).eq('id', true)
       console.log(JSON.stringify({ event: 'ai_key_removed', provider, by: userData.user.id }))
     }
-    const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model').eq('id', true).single()
-    return json({ ok: true, ...cur })
+    const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model, ai_chat_provider').eq('id', true).single()
+    return json({ ok: true, ...cur as object })
   }
 
   if (body.action === 'set') {
@@ -118,8 +126,8 @@ Deno.serve(async (req) => {
       console.log(JSON.stringify({ event: 'ai_key_rotated', provider, by: userData.user.id, configured: true }))
     }
 
-    const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model').eq('id', true).single()
-    return json({ ok: true, ...cur })
+    const { data: cur } = await admin.from('ai_settings').select('configured, groq_configured, last4, groq_last4, gemini_model, groq_model, ai_chat_provider').eq('id', true).single()
+    return json({ ok: true, ...cur as object })
   }
 
   return json({ ok: false, reason: 'unknown_action' }, 400)
